@@ -12,7 +12,7 @@ log() {
 pull_latest() {
     log "Pulling latest changes from GitHub repository"
     cd /var/www
-    git pull origin main
+    git --git-dir=/var/www/.git --work-tree=/ pull origin main
     log "Repository updated successfully"
 }
 
@@ -48,14 +48,24 @@ update_site() {
 update_nginx() {
     log "Checking for nginx configuration changes"
     
-    # Check if any nginx configs have changed by comparing modification times
-    if [ -n "$(find /etc/nginx/sites-available -newer /var/www/.git/FETCH_HEAD -name '*.conf' 2>/dev/null)" ]; then
-        log "Nginx configuration has been updated, reloading nginx"
-        nginx -t && systemctl reload nginx
-        log "Nginx reloaded successfully"
+    # Check if any nginx configs have changed
+    if git --git-dir=/var/www/.git diff --name-only HEAD@{1} HEAD | grep -q "^/etc/nginx/"; then
+        log "Nginx configuration has changed, testing and reloading"
+        
+        # Test nginx configuration
+        if nginx -t; then
+            log "Reloading nginx"
+            systemctl reload nginx
+            log "Nginx reloaded successfully"
+        else
+            log "ERROR: Nginx configuration test failed, not reloading"
+            return 1
+        fi
     else
-        log "No changes to nginx configuration"
+        log "No changes to nginx configuration, skipping reload"
     fi
+    
+    return 0
 }
 
 # Display script header
